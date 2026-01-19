@@ -6,7 +6,118 @@
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize">
 
-    <Grid Margin="12">
+    <Window.Resources>
+        <!-- ComboBoxItem (dropdown items) -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ComboBox: explicit template so closed area uses Background/Foreground -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <!-- Main border containing the closed area -->
+                            <Border x:Name="Bd"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="3"
+                                    Padding="4,2">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- selected value / content -->
+                                    <ContentPresenter x:Name="ContentSite"
+                                                      Grid.Column="0"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      VerticalAlignment="Center"
+                                                      Margin="2,0,4,0"/>
+
+                                    <!-- drop-down toggle button fixed at right -->
+                                    <ToggleButton x:Name="ToggleButton"
+                                                  Grid.Column="1"
+                                                  Focusable="False"
+                                                  IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                  ClickMode="Press"
+                                                  Background="{TemplateBinding Background}"
+                                                  BorderBrush="{TemplateBinding BorderBrush}"
+                                                  Width="28" Padding="0" Margin="0" HorizontalAlignment="Right" VerticalAlignment="Stretch">
+                                        <Path Data="M 0 0 L 4 4 L 8 0 Z"
+                                              Fill="{TemplateBinding Foreground}"
+                                              Width="8" Height="4"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </ToggleButton>
+                                </Grid>
+                            </Border>
+
+                            <!-- popup/dropdown -->
+                            <Popup x:Name="Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Border Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+                                        BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                                        BorderThickness="1"
+                                        CornerRadius="2"
+                                        Padding="2">
+                                    <ScrollViewer SnapsToDevicePixels="True">
+                                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="false">
+                                <Setter TargetName="Popup" Property="MinHeight" Value="60"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="false">
+                                <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Buttons, TextBox, CheckBox use SystemColors via DynamicResource (unchanged) -->
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"/>
+        </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"/>
+            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid" Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -19,45 +130,81 @@
 
             <!-- Theme Selection -->
             <TextBlock Text="Theme:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-            <ComboBox x:Name="ThemeComboBox" Margin="0,0,0,8" Height="26">
+            <ComboBox x:Name="ThemeComboBox" Margin="0,0,0,8" Height="26"
+                      SelectionChanged="Control_ValueChanged"
+                      Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                      Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"
+                      BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">
+                <ComboBoxItem Content="Auto"/>
                 <ComboBoxItem Content="Dark"/>
                 <ComboBoxItem Content="Light"/>
             </ComboBox>
 
-            <!-- Opacity -->
-            <TextBlock Text="Background Opacity (%)" FontWeight="SemiBold" Margin="0,4,0,4"/>
-            <Slider x:Name="OpacitySlider" Minimum="20" Maximum="100" Value="80" 
-                    TickFrequency="10" IsSnapToTickEnabled="True" Margin="0,0,0,8" Height="26"/>
-
-            <!-- Font Size (numeric up/down with mouse wheel) -->
-            <TextBlock Text="Font Size" FontWeight="SemiBold" Margin="0,4,0,4"/>
-            <Grid Margin="0,0,0,8">
+            <!-- Opacity (label shows numeric value) -->
+            <Grid Margin="0,4,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition/>
-                    <ColumnDefinition Width="28"/>
+                    <ColumnDefinition Width="56"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBox x:Name="FontSizeTextBox"
-                         Grid.Column="0"
-                         Height="26"
-                         VerticalContentAlignment="Center"
-                         PreviewTextInput="Integer_PreviewTextInput"
-                         PreviewKeyDown="Integer_PreviewKeyDown"
-                         PreviewMouseWheel="Numeric_PreviewMouseWheel"
-                         HorizontalContentAlignment="Right"/>
-
-                <StackPanel Grid.Column="1" Orientation="Vertical" Margin="4,0,0,0">
-                    <Button x:Name="FontSizeUpButton" Click="FontSizeUpButton_Click" Content="▲" FontSize="10" Height="13" Padding="0"/>
-                    <Button x:Name="FontSizeDownButton" Click="FontSizeDownButton_Click" Content="▼" FontSize="10" Height="13" Padding="0" Margin="0,2,0,0"/>
-                </StackPanel>
+                <TextBlock Grid.Column="0" Text="Background Opacity" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" x:Name="OpacityLabel" Text="80%" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,0,0"/>
             </Grid>
 
-            <!-- Overlay Size (Width/Height) - numeric up/down whole numbers -->
+            <Slider x:Name="OpacitySlider" Minimum="20" Maximum="100"
+                    TickFrequency="10" IsSnapToTickEnabled="True" Margin="0,0,0,8" Height="26"
+                    ValueChanged="Control_ValueChanged"/>
+
+            <!-- Font selection + size -->
+            <TextBlock Text="Font" FontWeight="SemiBold" Margin="0,4,0,4"/>
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="110"/>
+                </Grid.ColumnDefinitions>
+
+                <ComboBox x:Name="FontComboBox" Grid.Column="0" Height="26" Margin="0,0,8,0"
+                          SelectionChanged="Control_ValueChanged"
+                          Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                          Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}"
+                          BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"/>
+
+                <!-- Font size numeric up/down -->
+                <Grid Grid.Column="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition/>
+                        <ColumnDefinition Width="28"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="FontSizeTextBox"
+                             Grid.Column="0"
+                             Height="26"
+                             VerticalContentAlignment="Center"
+                             PreviewTextInput="Integer_PreviewTextInput"
+                             PreviewKeyDown="Integer_PreviewKeyDown"
+                             PreviewMouseWheel="Numeric_PreviewMouseWheel"
+                             HorizontalContentAlignment="Right"
+                             TextChanged="Control_ValueChanged" />
+
+                    <StackPanel Grid.Column="1" Orientation="Vertical" Margin="4,0,0,0">
+                        <Button x:Name="FontSizeUpButton" Click="FontSizeUpButton_Click" Content="▲" FontSize="10" Height="13" Padding="0"/>
+                        <Button x:Name="FontSizeDownButton" Click="FontSizeDownButton_Click" Content="▼" FontSize="10" Height="13" Padding="0" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- Overlay Size (Width/Height) - responsive grid to avoid clipping -->
             <TextBlock Text="Overlay Size (pixels)" FontWeight="SemiBold" Margin="0,6,0,4"/>
 
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
                 <!-- Width control -->
-                <StackPanel Width="180">
+                <StackPanel Grid.Column="0">
                     <TextBlock Text="Width" FontSize="12" Margin="0,0,0,3"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -72,7 +219,8 @@
                                  PreviewTextInput="Integer_PreviewTextInput"
                                  PreviewKeyDown="Integer_PreviewKeyDown"
                                  PreviewMouseWheel="Numeric_PreviewMouseWheel"
-                                 HorizontalContentAlignment="Right"/>
+                                 HorizontalContentAlignment="Right"
+                                 TextChanged="Control_ValueChanged"/>
 
                         <StackPanel Grid.Column="1" Orientation="Vertical" Margin="4,0,0,0">
                             <Button x:Name="WidthUpButton" Click="WidthUpButton_Click" Content="▲" FontSize="10" Height="13" Padding="0"/>
@@ -82,7 +230,7 @@
                 </StackPanel>
 
                 <!-- Height control -->
-                <StackPanel Width="180" Margin="20,0,0,0">
+                <StackPanel Grid.Column="2">
                     <TextBlock Text="Height" FontSize="12" Margin="0,0,0,3"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -97,7 +245,8 @@
                                  PreviewTextInput="Integer_PreviewTextInput"
                                  PreviewKeyDown="Integer_PreviewKeyDown"
                                  PreviewMouseWheel="Numeric_PreviewMouseWheel"
-                                 HorizontalContentAlignment="Right"/>
+                                 HorizontalContentAlignment="Right"
+                                 TextChanged="Control_ValueChanged"/>
 
                         <StackPanel Grid.Column="1" Orientation="Vertical" Margin="4,0,0,0">
                             <Button x:Name="HeightUpButton" Click="HeightUpButton_Click" Content="▲" FontSize="10" Height="13" Padding="0"/>
@@ -105,7 +254,7 @@
                         </StackPanel>
                     </Grid>
                 </StackPanel>
-            </StackPanel>
+            </Grid>
 
             <!-- Acrylic Effect -->
             <CheckBox x:Name="AcrylicCheckBox" Content="Enable Acrylic Blur (experimental)" Margin="0,2,0,8"/>

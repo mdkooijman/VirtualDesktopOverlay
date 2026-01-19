@@ -155,26 +155,75 @@ namespace VirtualDesktopOverlay
         private void OpenSettings()
         {
             var settingsWindow = new SettingsWindow(settings);
+            bool saved = false;
+
+            // live preview (does NOT mutate persisted settings)
+            settingsWindow.PreviewChanged += (s, ev) =>
+            {
+                ApplyPreview(ev.Preview);
+            };
+
+            // Save pressed inside SettingsWindow: the settings instance is updated and persisted there.
             settingsWindow.SettingsChanged += (s, e) =>
             {
+                // Apply saved settings (settings object now contains persisted values)
                 ApplySettings();
 
-                // apply size change immediately
+                // Apply saved size
                 this.Width = settings.WindowWidth;
                 this.Height = settings.WindowHeight;
 
                 settings.Save();
+                saved = true;
             };
+
+            settingsWindow.Closed += (s, e) =>
+            {
+                if (!saved)
+                {
+                    // revert visual changes (reapply persisted settings)
+                    ApplySettings();
+                    // reapply persisted size
+                    this.Width = settings.WindowWidth;
+                    this.Height = settings.WindowHeight;
+                }
+            };
+
             settingsWindow.Show();
         }
 
-        private void ToggleLock()
+        // New helper: apply a preview (does not persist)
+        private void ApplyPreview(AppSettings preview)
         {
-            isUnlocked = !isUnlocked;
-            SetClickThrough(!isUnlocked);
-            UpdateOverlayAppearance();
+            var background = preview.Theme switch
+            {
+                "Light" => Color.FromArgb((byte)(preview.Opacity * 255), 240, 240, 240),
+                "Dark" => Color.FromArgb((byte)(preview.Opacity * 255), 0, 0, 0),
+                _ => Color.FromArgb((byte)(preview.Opacity * 255), 0, 0, 0)
+            };
+
+            OverlayBorder.Background = new SolidColorBrush(background);
+
+            DesktopNameText.FontSize = preview.FontSize;
+            DesktopNameText.Foreground = preview.Theme == "Light"
+                ? new SolidColorBrush(Colors.Black)
+                : new SolidColorBrush(Colors.White);
+
+            try
+            {
+                DesktopNameText.FontFamily = new FontFamily(preview.FontFamily ?? DesktopNameText.FontFamily.Source);
+            }
+            catch
+            {
+                // ignore invalid font names
+            }
+
+            // preview size change
+            this.Width = preview.WindowWidth;
+            this.Height = preview.WindowHeight;
         }
 
+        // also update ApplySettings() to set FontFamily when applying real settings:
         private void ApplySettings()
         {
             // Apply theme
@@ -194,6 +243,16 @@ namespace VirtualDesktopOverlay
             DesktopNameText.Foreground = settings.Theme == "Light"
                 ? new SolidColorBrush(Colors.Black)
                 : new SolidColorBrush(Colors.White);
+
+            // Apply font family
+            try
+            {
+                DesktopNameText.FontFamily = new FontFamily(settings.FontFamily ?? DesktopNameText.FontFamily.Source);
+            }
+            catch
+            {
+                // ignore invalid
+            }
         }
 
         private void UpdateOverlayAppearance()
@@ -322,6 +381,15 @@ namespace VirtualDesktopOverlay
             trayIcon?.Dispose();
             updateTimer?.Stop();
         }
+
+        private void ToggleLock()
+        {
+            isUnlocked = !isUnlocked;
+            SetClickThrough(!isUnlocked);
+            UpdateOverlayAppearance();
+        }
+
+        private void ToggleLock(object? sender, RoutedEventArgs e) => ToggleLock();
     }
 }
 
