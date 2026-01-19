@@ -2,55 +2,125 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Settings - Virtual Desktop Overlay"
-        Height="450" Width="400"
+        Height="380" Width="400"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize">
 
-    <Grid Margin="20">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Overlay Settings" FontSize="20" FontWeight="Bold" Margin="0,0,0,20"/>
+        <TextBlock Grid.Row="0" Text="Overlay Settings" FontSize="18" FontWeight="Bold" Margin="0,0,0,12"/>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <!-- Theme Selection -->
-                <TextBlock Text="Theme:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                <ComboBox x:Name="ThemeComboBox" Margin="0,0,0,15">
-                    <ComboBoxItem Content="Dark"/>
-                    <ComboBoxItem Content="Light"/>
-                </ComboBox>
+        <StackPanel Grid.Row="1" Margin="0,0,0,6" VerticalAlignment="Top" >
 
-                <!-- Opacity -->
-                <TextBlock Text="Background Opacity:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                <Slider x:Name="OpacitySlider" Minimum="20" Maximum="100" Value="80" 
-                        TickFrequency="10" IsSnapToTickEnabled="True" Margin="0,0,0,15"/>
+            <!-- Theme Selection -->
+            <TextBlock Text="Theme:" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <ComboBox x:Name="ThemeComboBox" Margin="0,0,0,8" Height="26">
+                <ComboBoxItem Content="Dark"/>
+                <ComboBoxItem Content="Light"/>
+            </ComboBox>
 
-                <!-- Font Size -->
-                <TextBlock Text="Font Size:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                <Slider x:Name="FontSizeSlider" Minimum="12" Maximum="32" Value="18" 
-                        TickFrequency="2" IsSnapToTickEnabled="True" Margin="0,0,0,15"/>
+            <!-- Opacity -->
+            <TextBlock Text="Background Opacity (%)" FontWeight="SemiBold" Margin="0,4,0,4"/>
+            <Slider x:Name="OpacitySlider" Minimum="20" Maximum="100" Value="80" 
+                    TickFrequency="10" IsSnapToTickEnabled="True" Margin="0,0,0,8" Height="26"/>
 
-                <!-- Acrylic Effect -->
-                <CheckBox x:Name="AcrylicCheckBox" Content="Enable Acrylic Blur (experimental)" 
-                          Margin="0,0,0,15"/>
+            <!-- Font Size (numeric up/down with mouse wheel) -->
+            <TextBlock Text="Font Size" FontWeight="SemiBold" Margin="0,4,0,4"/>
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="28"/>
+                </Grid.ColumnDefinitions>
 
-                <!-- Startup -->
-                <CheckBox x:Name="StartupCheckBox" Content="Run at Windows startup" 
-                          Margin="0,0,0,15"/>
+                <TextBox x:Name="FontSizeTextBox"
+                         Grid.Column="0"
+                         Height="26"
+                         VerticalContentAlignment="Center"
+                         PreviewTextInput="Integer_PreviewTextInput"
+                         PreviewKeyDown="Integer_PreviewKeyDown"
+                         PreviewMouseWheel="Numeric_PreviewMouseWheel"
+                         HorizontalContentAlignment="Right"/>
 
-                <!-- Position Reset -->
-                <TextBlock Text="Position:" FontWeight="SemiBold" Margin="0,10,0,5"/>
-                <Button x:Name="ResetPositionButton" Content="Reset to Default Position" 
-                        Click="ResetPositionButton_Click" Padding="10,5"/>
+                <StackPanel Grid.Column="1" Orientation="Vertical" Margin="4,0,0,0">
+                    <Button x:Name="FontSizeUpButton" Click="FontSizeUpButton_Click" Content="▲" FontSize="10" Height="13" Padding="0"/>
+                    <Button x:Name="FontSizeDownButton" Click="FontSizeDownButton_Click" Content="▼" FontSize="10" Height="13" Padding="0" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Overlay Size (Width/Height) - numeric up/down whole numbers -->
+            <TextBlock Text="Overlay Size (pixels)" FontWeight="SemiBold" Margin="0,6,0,4"/>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <!-- Width control -->
+                <StackPanel Width="180">
+                    <TextBlock Text="Width" FontSize="12" Margin="0,0,0,3"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="28"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="WidthTextBox"
+                                 Grid.Column="0"
+                                 Height="26"
+                                 VerticalContentAlignment="Center"
+                                 PreviewTextInput="Integer_PreviewTextInput"
+                                 PreviewKeyDown="Integer_PreviewKeyDown"
+                                 PreviewMouseWheel="Numeric_PreviewMouseWheel"
+                                 HorizontalContentAlignment="Right"/>
+
+                        <StackPanel Grid.Column="1" Orientation="Vertical" Margin="4,0,0,0">
+                            <Button x:Name="WidthUpButton" Click="WidthUpButton_Click" Content="▲" FontSize="10" Height="13" Padding="0"/>
+                            <Button x:Name="WidthDownButton" Click="WidthDownButton_Click" Content="▼" FontSize="10" Height="13" Padding="0" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Height control -->
+                <StackPanel Width="180" Margin="20,0,0,0">
+                    <TextBlock Text="Height" FontSize="12" Margin="0,0,0,3"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="28"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="HeightTextBox"
+                                 Grid.Column="0"
+                                 Height="26"
+                                 VerticalContentAlignment="Center"
+                                 PreviewTextInput="Integer_PreviewTextInput"
+                                 PreviewKeyDown="Integer_PreviewKeyDown"
+                                 PreviewMouseWheel="Numeric_PreviewMouseWheel"
+                                 HorizontalContentAlignment="Right"/>
+
+                        <StackPanel Grid.Column="1" Orientation="Vertical" Margin="4,0,0,0">
+                            <Button x:Name="HeightUpButton" Click="HeightUpButton_Click" Content="▲" FontSize="10" Height="13" Padding="0"/>
+                            <Button x:Name="HeightDownButton" Click="HeightDownButton_Click" Content="▼" FontSize="10" Height="13" Padding="0" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
             </StackPanel>
-        </ScrollViewer>
+
+            <!-- Acrylic Effect -->
+            <CheckBox x:Name="AcrylicCheckBox" Content="Enable Acrylic Blur (experimental)" Margin="0,2,0,8"/>
+
+            <!-- Startup -->
+            <CheckBox x:Name="StartupCheckBox" Content="Run at Windows startup" Margin="0,2,0,8"/>
+
+            <!-- Position Reset -->
+            <TextBlock Text="Position" FontWeight="SemiBold" Margin="0,6,0,4"/>
+            <Button x:Name="ResetPositionButton" Content="Reset to Default Position" 
+                    Click="ResetPositionButton_Click" Padding="6,4" Width="220"/>
+        </StackPanel>
 
         <!-- Action Buttons -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
             <Button Content="Save" Width="80" Margin="0,0,10,0" Click="SaveButton_Click" IsDefault="True"/>
             <Button Content="Cancel" Width="80" Click="CancelButton_Click" IsCancel="True"/>
         </StackPanel>

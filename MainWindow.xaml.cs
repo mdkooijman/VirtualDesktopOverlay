@@ -53,6 +53,11 @@ namespace VirtualDesktopOverlay
             InitializeComponent();
 
             settings = AppSettings.Load();
+
+            // Apply saved size (device-independent units) before layout/default-position logic
+            this.Width = settings.WindowWidth;
+            this.Height = settings.WindowHeight;
+
             ApplySettings();
 
             if (settings.WindowLeft == 0 && settings.WindowTop == 0)
@@ -153,6 +158,11 @@ namespace VirtualDesktopOverlay
             settingsWindow.SettingsChanged += (s, e) =>
             {
                 ApplySettings();
+
+                // apply size change immediately
+                this.Width = settings.WindowWidth;
+                this.Height = settings.WindowHeight;
+
                 settings.Save();
             };
             settingsWindow.Show();
@@ -292,6 +302,11 @@ namespace VirtualDesktopOverlay
         {
             settings.WindowLeft = this.Left;
             settings.WindowTop = this.Top;
+
+            // persist current size as well
+            settings.WindowWidth = this.Width;
+            settings.WindowHeight = this.Height;
+
             settings.Save();
         }
 

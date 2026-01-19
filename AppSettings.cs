@@ -11,6 +11,11 @@ namespace VirtualDesktopOverlay
     {
         public double WindowLeft { get; set; }
         public double WindowTop { get; set; }
+
+        // Persisted window size (device-independent pixels)
+        public double WindowWidth { get; set; } = 300;
+        public double WindowHeight { get; set; } = 50;
+
         public string Theme { get; set; } = "Dark";
         public double Opacity { get; set; } = 0.8;
         public int FontSize { get; set; } = 18;
