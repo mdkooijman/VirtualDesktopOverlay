@@ -1,7 +1,8 @@
-﻿// ============================================
+// ============================================
 // MainWindow.xaml.cs - Main Overlay Window
 // ============================================
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -23,6 +24,7 @@ namespace VirtualDesktopOverlay
         private DispatcherTimer updateTimer;
         private AppSettings settings;
         private WinForms.NotifyIcon? trayIcon;
+        private bool isMouseOver = false;
 
         [DllImport("user32.dll")]
         private static extern int GetWindowLong(IntPtr hwnd, int index);
@@ -53,6 +55,13 @@ namespace VirtualDesktopOverlay
             InitializeComponent();
 
             settings = AppSettings.Load();
+            if (!File.Exists(AppSettings.ConfigPath))
+            {
+                settings.Save(); // This creates the physical file for the first time
+            }
+
+            // Sync RunAtStartup setting with actual registry state on load
+            settings.RunAtStartup = AppSettings.IsSetToRunAtStartup();
 
             // Apply saved size (device-independent units) before layout/default-position logic
             this.Width = settings.WindowWidth;
@@ -83,6 +92,10 @@ namespace VirtualDesktopOverlay
 
             UpdateDesktopName();
             CreateTrayIcon();
+
+            // Add mouse enter/leave events for hover transparency
+            this.MouseEnter += Window_MouseEnter;
+            this.MouseLeave += Window_MouseLeave;
         }
 
         protected override void OnSourceInitialized(EventArgs e)
@@ -137,7 +150,12 @@ namespace VirtualDesktopOverlay
         private void CreateTrayIcon()
         {
             trayIcon = new WinForms.NotifyIcon();
-            trayIcon.Icon = System.Drawing.SystemIcons.Application;
+            //trayIcon.Icon = System.Drawing.SystemIcons.Application;
+            // Get the path to your EXE
+            string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
+
+            // Extract the icon using the Drawing library
+            trayIcon.Icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
             trayIcon.Text = "Virtual Desktop Overlay";
             trayIcon.Visible = true;
 
@@ -259,12 +277,38 @@ namespace VirtualDesktopOverlay
         {
             if (isUnlocked)
             {
+                // Unlocked mode - show blue highlight
                 OverlayBorder.Background = new SolidColorBrush(
                     Color.FromArgb(100, 0, 120, 215));
             }
+            else if (isMouseOver)
+            {
+                // Mouse over - completely transparent
+                OverlayBorder.Opacity = 0;
+            }
             else
             {
+                // Normal mode - apply settings
+                OverlayBorder.Opacity = 1.0;
                 ApplySettings();
+            }
+        }
+
+        private void Window_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (!isUnlocked)
+            {
+                isMouseOver = true;
+                UpdateOverlayAppearance();
+            }
+        }
+
+        private void Window_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (isMouseOver)
+            {
+                isMouseOver = false;
+                UpdateOverlayAppearance();
             }
         }
 
@@ -392,4 +436,3 @@ namespace VirtualDesktopOverlay
         private void ToggleLock(object? sender, RoutedEventArgs e) => ToggleLock();
     }
 }
-

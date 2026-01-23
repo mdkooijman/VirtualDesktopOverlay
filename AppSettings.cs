@@ -1,4 +1,4 @@
-﻿// ============================================
+// ============================================
 // AppSettings.cs - Settings Management
 // ============================================
 using System;
@@ -27,11 +27,16 @@ namespace VirtualDesktopOverlay
         public bool AcrylicEffect { get; set; } = false;
         public bool RunAtStartup { get; set; } = false;
 
-        private static string ConfigPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "VirtualDesktopOverlay",
-            "settings.json"
-        );
+        // PORTABLE: Save settings next to the executable
+        public static string ConfigPath
+        {
+            get
+            {
+                // Get the directory where the .exe is located
+                string exePath = AppDomain.CurrentDomain.BaseDirectory;
+                return Path.Combine(exePath, "settings.json");
+            }
+        }
 
         public static AppSettings Load()
         {
@@ -51,9 +56,11 @@ namespace VirtualDesktopOverlay
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
                 var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(ConfigPath, json);
+                
+                // Update Windows startup registry when RunAtStartup changes
+                UpdateStartupRegistryKey();
             }
             catch { }
         }
@@ -90,6 +97,67 @@ namespace VirtualDesktopOverlay
             // default fallback
             return "Dark";
         }
+
+        /// <summary>
+        /// Updates the Windows registry to enable/disable run at startup
+        /// </summary>
+        private void UpdateStartupRegistryKey()
+        {
+            try
+            {
+                const string registryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+                const string appName = "VirtualDesktopOverlay";
+
+                using (var key = Registry.CurrentUser.OpenSubKey(registryKey, true))
+                {
+                    if (key != null)
+                    {
+                        if (RunAtStartup)
+                        {
+                            // Add to startup - use the current executable path
+                            string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+                            if (!string.IsNullOrEmpty(exePath))
+                            {
+                                key.SetValue(appName, $"\"{exePath}\"");
+                            }
+                        }
+                        else
+                        {
+                            // Remove from startup
+                            if (key.GetValue(appName) != null)
+                            {
+                                key.DeleteValue(appName);
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Silent fail - registry access might be restricted
+            }
+        }
+
+        /// <summary>
+        /// Check if the app is currently set to run at startup
+        /// </summary>
+        public static bool IsSetToRunAtStartup()
+        {
+            try
+            {
+                const string registryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+                const string appName = "VirtualDesktopOverlay";
+
+                using (var key = Registry.CurrentUser.OpenSubKey(registryKey, false))
+                {
+                    if (key != null)
+                    {
+                        return key.GetValue(appName) != null;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
     }
 }
-
