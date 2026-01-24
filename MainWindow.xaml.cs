@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 
@@ -17,7 +18,11 @@ namespace VirtualDesktopOverlay
     {
         private const int WS_EX_TRANSPARENT = 0x00000020;
         private const int WS_EX_TOOLWINDOW = 0x00000080;
+        private const int WS_EX_LAYERED = 0x00080000;
         private const int GWL_EXSTYLE = -20;
+        private const int WM_NCHITTEST = 0x0084;
+        private const int HTCLIENT = 1;
+        private const int HTTRANSPARENT = -1;
 
         private bool isUnlocked = false;
         private Point dragOffset;
@@ -25,6 +30,7 @@ namespace VirtualDesktopOverlay
         private AppSettings settings;
         private WinForms.NotifyIcon? trayIcon;
         private bool isMouseOver = false;
+        private HwndSource? hwndSource;
 
         [DllImport("user32.dll")]
         private static extern int GetWindowLong(IntPtr hwnd, int index);
@@ -92,15 +98,16 @@ namespace VirtualDesktopOverlay
 
             UpdateDesktopName();
             CreateTrayIcon();
-
-            // Add mouse enter/leave events for hover transparency
-            this.MouseEnter += Window_MouseEnter;
-            this.MouseLeave += Window_MouseLeave;
         }
 
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
+            
+            // Add hook for mouse hover detection
+            hwndSource = PresentationSource.FromVisual(this) as HwndSource;
+            hwndSource?.AddHook(WndProc);
+            
             PinToAllDesktops();
         }
 
@@ -137,14 +144,47 @@ namespace VirtualDesktopOverlay
 
             if (clickThrough)
             {
-                SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT);
+                // Make window layered and transparent to mouse (but we still get hit test messages)
+                SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED);
                 this.Cursor = Cursors.Arrow;
             }
             else
             {
-                SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle & ~WS_EX_TRANSPARENT);
+                SetWindowLong(hwnd, GWL_EXSTYLE, (extendedStyle | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
                 this.Cursor = Cursors.SizeAll;
             }
+        }
+
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            // WM_NCHITTEST - Windows asking "what is at this position?"
+            if (msg == WM_NCHITTEST && !isUnlocked)
+            {
+                // Get mouse position from lParam
+                int x = (short)(lParam.ToInt32() & 0xFFFF);
+                int y = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+
+                // Get window bounds
+                var topLeft = PointToScreen(new Point(0, 0));
+                var bottomRight = PointToScreen(new Point(this.ActualWidth, this.ActualHeight));
+
+                // Check if mouse is within window
+                bool mouseInBounds = x >= topLeft.X && x <= bottomRight.X &&
+                                     y >= topLeft.Y && y <= bottomRight.Y;
+
+                // Update hover state
+                if (mouseInBounds != isMouseOver)
+                {
+                    isMouseOver = mouseInBounds;
+                    Dispatcher.BeginInvoke(() => UpdateOverlayAppearance());
+                }
+
+                // Always return transparent so clicks pass through
+                handled = true;
+                return new IntPtr(HTTRANSPARENT);
+            }
+
+            return IntPtr.Zero;
         }
 
         private void CreateTrayIcon()
@@ -277,39 +317,59 @@ namespace VirtualDesktopOverlay
         {
             if (isUnlocked)
             {
-                // Unlocked mode - show blue highlight
+                // Unlocked mode - show blue highlight (no animation)
+                StopOpacityAnimation();
+                OverlayBorder.Opacity = 1.0;
                 OverlayBorder.Background = new SolidColorBrush(
                     Color.FromArgb(100, 0, 120, 215));
             }
             else if (isMouseOver)
             {
-                // Mouse over - completely transparent
-                OverlayBorder.Opacity = 0;
+                // Mouse over - fade to completely transparent
+                AnimateOpacity(0.0, 200);
             }
             else
             {
-                // Normal mode - apply settings
-                OverlayBorder.Opacity = 1.0;
+                // Normal mode - fade back to visible and apply settings
+                StopOpacityAnimation();
                 ApplySettings();
+                AnimateOpacity(1.0, 200);
             }
         }
 
-        private void Window_MouseEnter(object sender, MouseEventArgs e)
+
+        // private void Window_MouseEnter(object sender, MouseEventArgs e)
+        // {
+        //     if (!isUnlocked)
+        //     {
+        //         isMouseOver = true;
+        //         UpdateOverlayAppearance();
+        //     }
+        // }
+
+        // private void Window_MouseLeave(object sender, MouseEventArgs e)
+        // {
+        //     if (isMouseOver)
+        //     {
+        //         isMouseOver = false;
+        //         UpdateOverlayAppearance();
+        //     }
+        // }
+        private void AnimateOpacity(double targetOpacity, int durationMs)
         {
-            if (!isUnlocked)
+            var animation = new DoubleAnimation
             {
-                isMouseOver = true;
-                UpdateOverlayAppearance();
-            }
+                To = targetOpacity,
+                Duration = TimeSpan.FromMilliseconds(durationMs),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
+            };
+            
+            OverlayBorder.BeginAnimation(UIElement.OpacityProperty, animation);
         }
 
-        private void Window_MouseLeave(object sender, MouseEventArgs e)
+        private void StopOpacityAnimation()
         {
-            if (isMouseOver)
-            {
-                isMouseOver = false;
-                UpdateOverlayAppearance();
-            }
+            OverlayBorder.BeginAnimation(UIElement.OpacityProperty, null);
         }
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -422,6 +482,10 @@ namespace VirtualDesktopOverlay
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
+            
+            // Remove window message hook
+            hwndSource?.RemoveHook(WndProc);
+
             trayIcon?.Dispose();
             updateTimer?.Stop();
         }
