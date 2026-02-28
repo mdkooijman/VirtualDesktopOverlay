@@ -34,6 +34,11 @@ namespace VirtualDesktopOverlay
         private bool isMouseOver = false;
         private HwndSource? hwndSource;
 
+        // Minimal addition: keep a reference to the "Verplaatsen" menu item so we can update it on open
+        private WinForms.ToolStripMenuItem? moveMenuItem;
+        // Minimal addition: keep a reference to the "Verbergen" menu item so we can update it on open
+        private WinForms.ToolStripMenuItem? hideMenuItem;
+
         [DllImport("user32.dll")]
         private static extern int GetWindowLong(IntPtr hwnd, int index);
 
@@ -305,13 +310,38 @@ namespace VirtualDesktopOverlay
 
             var contextMenu = new WinForms.ContextMenuStrip();
 
-            // contextMenu.Items.Add("Verbergen", null, (s, e) => ToggleLock());
-            // contextMenu.Items.Add(new WinForms.ToolStripSeparator());   
-            contextMenu.Items.Add("Verplaatsen", null, (s, e) => ToggleLock());
+            // create the hide/display item and keep a reference
+            hideMenuItem = new WinForms.ToolStripMenuItem("Verbergen");
+            hideMenuItem.Click += (s, e) => ToggleHide();
+            contextMenu.Items.Add(hideMenuItem);
+
+            // create the move/lock item and keep a reference
+            moveMenuItem = new WinForms.ToolStripMenuItem("Verplaatsen");
+            moveMenuItem.Click += (s, e) => ToggleLock();
+            contextMenu.Items.Add(moveMenuItem);
+
             contextMenu.Items.Add(new WinForms.ToolStripSeparator());
             contextMenu.Items.Add("Instellingen", null, (s, e) => OpenSettings());
             contextMenu.Items.Add(new WinForms.ToolStripSeparator());
             contextMenu.Items.Add("Afsluiten", null, (s, e) => ExitApplication());
+
+            // Update menu items each time the menu opens so they reflect current state
+            contextMenu.Opening += (s, e) =>
+            {
+                if (moveMenuItem != null)
+                {
+                    moveMenuItem.Checked = isUnlocked;
+                    // leave label as-is or change if you prefer different wording
+                    // moveMenuItem.Text = isUnlocked ? "Ontgrendelen" : "Verplaatsen";
+                }
+
+                if (hideMenuItem != null)
+                {
+                    // Checked = hidden, label shows the action to take next
+                    hideMenuItem.Checked = isHidden;
+                    //hideMenuItem.Text = isHidden ? "Weergeven" : "Verbergen";
+                }
+            };
 
             trayIcon.ContextMenuStrip = contextMenu;
         }
@@ -666,5 +696,42 @@ namespace VirtualDesktopOverlay
         }
 
         private void ToggleLock(object? sender, RoutedEventArgs e) => ToggleLock();
+
+        private void ToggleHide()
+        {
+            isHidden = !isHidden;
+
+            if (isHidden)
+            {
+                // stop timers to reduce work while hidden
+                updateTimer?.Stop();
+                mouseCheckTimer?.Stop();
+
+                // release any mouse capture and hide the window
+                if (this.IsMouseCaptured) this.ReleaseMouseCapture();
+                this.Hide();
+            }
+            else
+            {
+                // show the window and restore state
+                this.Show();
+                ApplySettings();
+                UpdateDesktopName();
+
+                // restart periodic updates
+                updateTimer?.Start();
+
+                // restore click-through (normal behavior)
+                SetClickThrough(true);
+                UpdateOverlayAppearance();
+            }
+
+            // update menu item immediately (in case menu remains open)
+            if (hideMenuItem != null)
+            {
+                hideMenuItem.Checked = isHidden;
+                hideMenuItem.Text = isHidden ? "Weergeven" : "Verbergen";
+            }
+        }
     }
 }
