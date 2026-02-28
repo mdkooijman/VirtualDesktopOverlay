@@ -1,4 +1,4 @@
-﻿// ============================================
+// ============================================
 // MainWindow.xaml.cs - Main Overlay Window
 // ============================================
 using System;
@@ -25,7 +25,6 @@ namespace VirtualDesktopOverlay
         private const int HTTRANSPARENT = -1;
 
         private bool isUnlocked = false;
-        private bool isHidden = false;
         private Point dragOffset;
         private DispatcherTimer updateTimer;
         private DispatcherTimer mouseCheckTimer;
@@ -90,7 +89,7 @@ namespace VirtualDesktopOverlay
             this.Left = settings.WindowLeft;
             this.Top = settings.WindowTop;
 
-            //SetClickThrough(true);
+            SetClickThrough(true);
 
             // Update desktop name periodically
             updateTimer = new DispatcherTimer();
@@ -110,30 +109,12 @@ namespace VirtualDesktopOverlay
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-
+            
             // Add hook for mouse hover detection
             hwndSource = PresentationSource.FromVisual(this) as HwndSource;
             hwndSource?.AddHook(WndProc);
-
-            // Pin to all desktops first
+            
             PinToAllDesktops();
-
-            // Set click-through mode
-            Dispatcher.BeginInvoke(new Action(() => {
-                SetClickThrough(true);
-
-                // Start a polling timer to check mouse position
-                // (WM_NCHITTEST isn't reliable with transparent windows)
-                var pollTimer = new DispatcherTimer();
-                pollTimer.Interval = TimeSpan.FromMilliseconds(100);
-                pollTimer.Tick += (s, ev) => {
-                    if (!isUnlocked)
-                    {
-                        CheckMousePosition();
-                    }
-                };
-                pollTimer.Start();
-            }), System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void PinToAllDesktops()
@@ -148,15 +129,10 @@ namespace VirtualDesktopOverlay
                 // Get current desktop ID
                 desktopManager.GetWindowDesktopId(hwnd, out Guid currentDesktop);
 
-                // Add WS_EX_TOOLWINDOW while preserving other flags
+                // Note: Full pinning requires additional COM interfaces not in standard IVirtualDesktopManager
+                // This sets up the window, and we'll use WS_EX_TOOLWINDOW to help it appear on all desktops
                 var extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-
-                // Only add TOOLWINDOW if not already set
-                if ((extendedStyle & WS_EX_TOOLWINDOW) == 0)
-                {
-                    SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TOOLWINDOW);
-                    System.Diagnostics.Debug.WriteLine($"PinToAllDesktops: Added WS_EX_TOOLWINDOW, style now 0x{GetWindowLong(hwnd, GWL_EXSTYLE):X}");
-                }
+                SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TOOLWINDOW);
             }
             catch (Exception ex)
             {
@@ -170,43 +146,23 @@ namespace VirtualDesktopOverlay
             var hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == IntPtr.Zero) return;
 
-            var currentStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            int newStyle;
+            var extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
 
             if (clickThrough)
             {
-                // Enable click-through: add TRANSPARENT and ensure LAYERED
-                newStyle = currentStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED;
+                // Make window layered and transparent to mouse (but we still get hit test messages)
+                SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED);
                 this.Cursor = Cursors.Arrow;
             }
             else
             {
-                // Disable click-through: remove TRANSPARENT but keep LAYERED
-                newStyle = (currentStyle & ~WS_EX_TRANSPARENT) | WS_EX_LAYERED;
+                SetWindowLong(hwnd, GWL_EXSTYLE, (extendedStyle | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT);
                 this.Cursor = Cursors.SizeAll;
             }
-
-            // Force the style change
-            SetWindowLong(hwnd, GWL_EXSTYLE, newStyle);
-
-            // Verify it worked and retry if needed
-            var verifyStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            if (verifyStyle != newStyle)
-            {
-                System.Diagnostics.Debug.WriteLine($"SetClickThrough: Style mismatch! Expected 0x{newStyle:X}, got 0x{verifyStyle:X}. Retrying...");
-                SetWindowLong(hwnd, GWL_EXSTYLE, newStyle);
-            }
-
-            System.Diagnostics.Debug.WriteLine($"SetClickThrough({clickThrough}): 0x{currentStyle:X} → 0x{newStyle:X}");
         }
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg == WM_NCHITTEST)
-            {
-                System.Diagnostics.Debug.WriteLine($"WndProc: WM_NCHITTEST received, isUnlocked={isUnlocked}");
-            }
-
             // WM_NCHITTEST - Windows asking "what is at this position?"
             if (msg == WM_NCHITTEST && !isUnlocked)
             {
@@ -305,13 +261,11 @@ namespace VirtualDesktopOverlay
 
             var contextMenu = new WinForms.ContextMenuStrip();
 
-            // contextMenu.Items.Add("Verbergen", null, (s, e) => ToggleLock());
-            // contextMenu.Items.Add(new WinForms.ToolStripSeparator());   
-            contextMenu.Items.Add("Verplaatsen", null, (s, e) => ToggleLock());
+            contextMenu.Items.Add("Settings", null, (s, e) => OpenSettings());
             contextMenu.Items.Add(new WinForms.ToolStripSeparator());
-            contextMenu.Items.Add("Instellingen", null, (s, e) => OpenSettings());
+            contextMenu.Items.Add("Lock Overlay", null, (s, e) => ToggleLock());
             contextMenu.Items.Add(new WinForms.ToolStripSeparator());
-            contextMenu.Items.Add("Afsluiten", null, (s, e) => ExitApplication());
+            contextMenu.Items.Add("Exit", null, (s, e) => ExitApplication());
 
             trayIcon.ContextMenuStrip = contextMenu;
         }
@@ -496,17 +450,12 @@ namespace VirtualDesktopOverlay
                   (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift))
             {
                 isUnlocked = false;
-                
-                // Check if mouse is currently over the overlay FIRST
-                CheckMousePosition();
-                
-                // Update appearance BEFORE setting click-through
-                // (to avoid WndProc race condition)
-                UpdateOverlayAppearance();
-                
-                // Now enable click-through (this triggers WndProc)
                 SetClickThrough(true);
                 
+                // Check if mouse is currently over the overlay
+                CheckMousePosition();
+                
+                UpdateOverlayAppearance();
                 SavePosition();
             }
         }
@@ -517,7 +466,7 @@ namespace VirtualDesktopOverlay
             {
                 // Get current mouse position
                 var mousePos = System.Windows.Forms.Cursor.Position;
-
+                
                 // Get window bounds
                 var topLeft = PointToScreen(new Point(0, 0));
                 var bottomRight = PointToScreen(new Point(this.ActualWidth, this.ActualHeight));
@@ -530,39 +479,24 @@ namespace VirtualDesktopOverlay
                 System.Diagnostics.Debug.WriteLine($"CheckMousePosition: Mouse at ({mousePos.X},{mousePos.Y}), bounds ({topLeft.X},{topLeft.Y})-({bottomRight.X},{bottomRight.Y}), inBounds={mouseInBounds}");
 #endif
 
-                // Track if state changed
-                bool stateChanged = false;
-
-                if (mouseInBounds && !isMouseOver)
+                if (mouseInBounds)
                 {
-                    // Mouse just entered - start hiding
+                    // Mouse is over overlay - start hiding
                     isMouseOver = true;
                     mouseCheckTimer.Start();
-                    stateChanged = true;
                 }
-                else if (!mouseInBounds && isMouseOver)
+                else
                 {
-                    // Mouse just left - stop hiding
+                    // Mouse is not over overlay
                     isMouseOver = false;
                     mouseCheckTimer.Stop();
-                    stateChanged = true;
-                }
-
-                // Update appearance if state changed
-                if (stateChanged)
-                {
-                    UpdateOverlayAppearance();
                 }
             }
             catch
             {
                 // Fallback: assume mouse not over
-                if (isMouseOver)
-                {
-                    isMouseOver = false;
-                    mouseCheckTimer.Stop();
-                    UpdateOverlayAppearance();
-                }
+                isMouseOver = false;
+                mouseCheckTimer.Stop();
             }
         }
 
